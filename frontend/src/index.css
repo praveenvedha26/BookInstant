@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#090a0f] text-slate-100 font-sans min-h-screen overflow-x-hidden;
+  }
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(17, 19, 26, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: rgba(26, 29, 38, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-hover:hover {
+  background: rgba(38, 42, 54, 0.8);
+  border-color: rgba(244, 63, 94, 0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px -10px rgba(244, 63, 94, 0.25);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090a0f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #262a36;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e11d48;
+}
+
+/* Glowing text and buttons */
+.glow-brand {
+  box-shadow: 0 0 20px rgba(225, 29, 72, 0.45);
+}
+
+.glow-brand-sm {
+  box-shadow: 0 0 10px rgba(225, 29, 72, 0.3);
+}
+
+/* Curved screen display */
+.cinema-screen {
+  perspective: 400px;
+}
+.cinema-screen-curve {
+  transform: rotateX(-12deg);
+  box-shadow: 0 14px 40px -10px rgba(56, 189, 248, 0.3);
+}

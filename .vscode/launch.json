@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Spring Boot - BookInstant Backend",
+      "request": "launch",
+      "mainClass": "com.bookinstant.BookInstantApplication",
+      "projectName": "bookinstant-backend",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "SPRING_DATASOURCE_URL": "jdbc:postgresql://localhost:5432/bookinstant_db",
+        "SPRING_DATASOURCE_USERNAME": "postgres",
+        "SPRING_DATASOURCE_PASSWORD": "praveen26",
+        "REDISSON_ADDRESS": "redis://127.0.0.1:6379"
+      }
+    },
+    {
+      "type": "chrome",
+      "name": "Debug Frontend (Chrome)",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend/src"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack (Backend + Frontend)",
+      "configurations": [
+        "Spring Boot - BookInstant Backend",
+        "Debug Frontend (Chrome)"
+      ]
+    }
+  ]
+}
