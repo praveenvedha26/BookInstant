@@ -21,6 +21,7 @@ spring:
   sql:
     init:
       mode: always
+      continue-on-error: true
 
 redisson:
   address: ${REDISSON_ADDRESS:redis://127.0.0.1:6379}

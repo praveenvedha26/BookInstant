@@ -424,6 +424,24 @@ let mockBookings = [
   }
 ];
 
+const BOOKINGS_STORAGE_KEY = 'bookinstant_confirmed_bookings_v2';
+export const getStoredBookings = () => {
+  try {
+    const raw = localStorage.getItem(BOOKINGS_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return mockBookings;
+};
+
+export const saveStoredBookings = (bookings) => {
+  try {
+    mockBookings = bookings;
+    localStorage.setItem(BOOKINGS_STORAGE_KEY, JSON.stringify(bookings));
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('bookinstant_holds_changed'));
+  } catch (e) {}
+};
+
 export const api = {
   getMovies: async () => {
     try {
@@ -474,7 +492,8 @@ export const api = {
 
     // Query PostgreSQL bookings strictly scoped to this specific showtimeId
     const bookedSeatIds = new Set();
-    mockBookings
+    const storedBookings = getStoredBookings();
+    storedBookings
       .filter(b => String(b.showtimeId) === String(showtimeId) && b.status === 'CONFIRMED')
       .forEach(b => {
         if (b.seatIds) b.seatIds.forEach(id => bookedSeatIds.add(Number(id)));
@@ -540,8 +559,9 @@ export const api = {
       const seat = mockSeats.find(s => s.id === seatId);
       const seatLabel = seat ? seat.seatLabel : `#${seatId}`;
 
-      // Check if booked in mockBookings for this specific showtimeId
-      const isBookedForThisShowtime = mockBookings.some(b => 
+      // Check if booked in storedBookings for this specific showtimeId
+      const currentBookings = getStoredBookings();
+      const isBookedForThisShowtime = currentBookings.some(b => 
         String(b.showtimeId) === String(showtimeId) && 
         b.status === 'CONFIRMED' && 
         ((b.seatIds && b.seatIds.includes(seatId)) || (b.seatLabels && b.seatLabels.includes(seatLabel)))
@@ -681,7 +701,10 @@ export const api = {
       createdAt: new Date().toISOString()
     };
 
-    mockBookings.unshift(booking);
+    const allBookings = getStoredBookings();
+    allBookings.unshift(booking);
+    saveStoredBookings(allBookings);
+
     mockAuditLogs.unshift({
       id: Date.now(),
       timestamp: new Date().toISOString(),

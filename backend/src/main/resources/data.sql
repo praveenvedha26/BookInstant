@@ -67,3 +67,14 @@ INSERT INTO bookings (id, user_id, showtime_id, total_amount, status, qr_code_to
 INSERT INTO booking_seats (id, booking_id, seat_id) VALUES
 (1, 1, 24),
 (2, 1, 25);
+
+-- Synchronize sequences with max IDs so new auto-generated IDs never collide
+SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 1) FROM users));
+SELECT setval('movies_id_seq', (SELECT COALESCE(MAX(id), 1) FROM movies));
+SELECT setval('theatres_id_seq', (SELECT COALESCE(MAX(id), 1) FROM theatres));
+SELECT setval('screens_id_seq', (SELECT COALESCE(MAX(id), 1) FROM screens));
+SELECT setval('showtimes_id_seq', (SELECT COALESCE(MAX(id), 1) FROM showtimes));
+SELECT setval('seats_id_seq', (SELECT COALESCE(MAX(id), 1) FROM seats));
+SELECT setval('bookings_id_seq', (SELECT COALESCE(MAX(id), 1) FROM bookings));
+SELECT setval('booking_seats_id_seq', (SELECT COALESCE(MAX(id), 1) FROM booking_seats));
+

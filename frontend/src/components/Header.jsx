@@ -48,7 +48,6 @@ export default function Header({
 
   const navItems = [
     { id: 'for-you', path: '/', label: 'For You' },
-    { id: 'movies', path: '/movies', label: 'Movies' },
     { id: 'categories', path: '/categories', label: 'Categories' },
     { id: 'upcoming', path: '/upcoming', label: 'Upcoming & Pre-Book' },
     { id: 'events', path: '/events', label: 'Events' }

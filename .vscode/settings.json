@@ -3,9 +3,22 @@
   "editor.tabSize": 2,
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
-  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.configuration.updateBuildConfiguration": "interactive",
   "java.compile.nullAnalysis.mode": "automatic",
   "maven.terminal.useJavaHome": true,
+  "java.project.resourceFilters": [
+    "node_modules",
+    ".git",
+    "frontend"
+  ],
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.metadata/**",
+    "**/archetype/**",
+    "**/META-INF/**",
+    "**/frontend/**",
+    "**/dist/**"
+  ],
   "tailwindCSS.includeLanguages": {
     "javascript": "javascript",
     "javascriptreact": "javascriptreact"

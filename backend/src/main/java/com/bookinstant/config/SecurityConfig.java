@@ -46,8 +46,7 @@ public class SecurityConfig {
                                 "/api/v1/movies/**",
                                 "/api/v1/theatres/**",
                                 "/api/v1/showtimes/**",
-                                "/api/v1/seats/status/**",
-                                "/api/v1/seats/lock",
+                                "/api/v1/seats/**",
                                 "/api/v1/payments/**"
                         ).permitAll()
                         // Admin-only endpoints: require ROLE_ADMIN

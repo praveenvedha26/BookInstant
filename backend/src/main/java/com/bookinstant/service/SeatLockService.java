@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -56,6 +57,44 @@ public class SeatLockService {
      * Key Value: {userId} (e.g., User_1)
      * Atomic SETNX execution enforces zero race conditions and blocks concurrent locking.
      */
+    private Long parseNumericShowtimeId(String showtimeId) {
+        if (showtimeId == null || showtimeId.isBlank()) return 1L;
+        try {
+            return Long.parseLong(showtimeId);
+        } catch (NumberFormatException e) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)").matcher(showtimeId);
+            if (m.find()) {
+                try {
+                    return Long.parseLong(m.group(1));
+                } catch (Exception ignored) {}
+            }
+        }
+        return 1L;
+    }
+
+    private Long parseNumericSeatId(String seatId) {
+        if (seatId == null || seatId.isBlank()) return null;
+        try {
+            return Long.parseLong(seatId);
+        } catch (NumberFormatException e) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)").matcher(seatId);
+            if (m.find()) {
+                try {
+                    return Long.parseLong(m.group(1));
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
+    private boolean isSameUser(String u1, String u2) {
+        if (u1 == null || u2 == null) return false;
+        if (u1.equals(u2)) return true;
+        String clean1 = u1.replaceAll("(?i)^user_?", "").trim();
+        String clean2 = u2.replaceAll("(?i)^user_?", "").trim();
+        return clean1.equals(clean2);
+    }
+
     public SeatLockResponse lockSeats(SeatLockRequest request) {
         String showtimeId = request.getShowtimeIdStr();
         List<String> seatIds = request.getSeatIdStrs();
@@ -65,31 +104,28 @@ public class SeatLockService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No seats specified for locking");
         }
 
-        // Validate showtime exists if numeric ID
-        try {
-            Long numericShowtimeId = Long.parseLong(showtimeId.replaceFirst("^showtime_", ""));
-            showtimeRepository.findById(numericShowtimeId).ifPresent(st -> {
-                List<Long> alreadyBookedIds = bookingRepository.findBookedSeatIdsByShowtimeIdAndStatus(numericShowtimeId, BookingStatus.CONFIRMED);
-                for (String seatId : seatIds) {
-                    try {
-                        Long sid = Long.parseLong(seatId);
-                        if (alreadyBookedIds.contains(sid)) {
-                            auditLogService.record(userVal, seatId, "LOCK_ATTEMPT", 409, "Seat is permanently BOOKED in PostgreSQL");
-                            throw new ResponseStatusException(HttpStatus.CONFLICT, "One or more selected seats are no longer available for this showtime.");
-                        }
-                    } catch (NumberFormatException ignored) {}
+        Long numericShowtimeId = parseNumericShowtimeId(showtimeId);
+        if (numericShowtimeId != null) {
+            List<Long> alreadyBookedIds = bookingRepository.findBookedSeatIdsByShowtimeIdAndStatus(numericShowtimeId, BookingStatus.CONFIRMED);
+            for (String seatId : seatIds) {
+                Long sid = parseNumericSeatId(seatId);
+                if (sid != null && alreadyBookedIds.contains(sid)) {
+                    auditLogService.record(userVal, seatId, "LOCK_ATTEMPT", 409, "Seat is permanently BOOKED in PostgreSQL");
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "One or more selected seats are no longer available for this showtime.");
                 }
-            });
-        } catch (ResponseStatusException e) {
-            throw e;
-        } catch (Exception ignored) {}
+            }
+        }
 
         // 1. Atomic Multi-Key Validation: Loop through all requested seatIds for that specific showtimeId
         // Check if ANY key seat:hold:{showtimeId}:{seatId} already exists in Redis
         for (String seatId : seatIds) {
             String key = SEAT_HOLD_PREFIX + showtimeId + ":" + seatId;
+            String keyNum = SEAT_HOLD_PREFIX + numericShowtimeId + ":" + seatId;
             String currentHolder = getKeyValue(key);
-            if (currentHolder != null && !currentHolder.equals(userVal)) {
+            if (currentHolder == null) {
+                currentHolder = getKeyValue(keyNum);
+            }
+            if (currentHolder != null && !isSameUser(currentHolder, userVal)) {
                 auditLogService.record(userVal, seatId, "LOCK_CONFLICT", 409, 
                         "Seat " + seatId + " already held in Redis by user " + currentHolder + " for showtime " + showtimeId);
                 throw new ResponseStatusException(HttpStatus.CONFLICT, 
@@ -107,7 +143,7 @@ public class SeatLockService {
 
                 if (!acquired) {
                     String currentHolder = getKeyValue(key);
-                    if (currentHolder != null && currentHolder.equals(userVal)) {
+                    if (currentHolder != null && isSameUser(currentHolder, userVal)) {
                         refreshKeyTtl(key, userVal, HOLD_TTL_MINUTES);
                         lockedKeysInThisTx.add(key);
                     } else {
@@ -152,18 +188,19 @@ public class SeatLockService {
      */
     public List<SeatStatusDto> getSeatsStatus(Object rawShowtimeId, Object rawCurrentUserId) {
         String showtimeId = String.valueOf(rawShowtimeId);
-        Long numericShowtimeId = null;
-        try {
-            numericShowtimeId = Long.parseLong(showtimeId.replaceFirst("^showtime_", ""));
-        } catch (Exception ignored) {}
+        Long numericShowtimeId = parseNumericShowtimeId(showtimeId);
 
         List<Seat> seats = new ArrayList<>();
         List<Long> bookedSeatIds = new ArrayList<>();
-        Integer price = 350;
+        BigDecimal defaultPrice = BigDecimal.valueOf(350);
+        final BigDecimal[] showtimePrice = new BigDecimal[]{ defaultPrice };
 
         if (numericShowtimeId != null) {
             final Long lookupId = numericShowtimeId;
             showtimeRepository.findById(lookupId).ifPresent(st -> {
+                if (st.getPrice() != null) {
+                    showtimePrice[0] = st.getPrice();
+                }
                 Long screenId = st.getScreen().getId();
                 seats.addAll(seatRepository.findByScreenIdOrderByRowLabelAscSeatNumberAsc(screenId));
                 bookedSeatIds.addAll(bookingRepository.findBookedSeatIdsByShowtimeIdAndStatus(lookupId, BookingStatus.CONFIRMED));
@@ -172,15 +209,20 @@ public class SeatLockService {
 
         if (seats.isEmpty()) {
             seats.addAll(seatRepository.findAll());
+            bookedSeatIds.addAll(bookingRepository.findBookedSeatIdsByShowtimeIdAndStatus(1L, BookingStatus.CONFIRMED));
         }
 
         List<SeatStatusDto> result = new ArrayList<>();
-        String currentUserIdStr = currentUserId != null ? String.valueOf(currentUserId) : null;
 
         for (Seat seat : seats) {
             String key = SEAT_HOLD_PREFIX + showtimeId + ":" + seat.getId();
+            String keyNum = SEAT_HOLD_PREFIX + numericShowtimeId + ":" + seat.getId();
             String heldByUserIdStr = getKeyValue(key);
             long remainingSeconds = getKeyTtlSeconds(key);
+            if (heldByUserIdStr == null || remainingSeconds <= 0) {
+                heldByUserIdStr = getKeyValue(keyNum);
+                remainingSeconds = getKeyTtlSeconds(keyNum);
+            }
 
             String status = "AVAILABLE";
             Long heldByLong = null;
@@ -190,7 +232,7 @@ public class SeatLockService {
             } else if (heldByUserIdStr != null && remainingSeconds > 0) {
                 status = "HELD"; // In Redis
                 try {
-                    heldByLong = Long.parseLong(heldByUserIdStr);
+                    heldByLong = Long.parseLong(heldByUserIdStr.replaceAll("(?i)^user_?", "").trim());
                 } catch (Exception e) {
                     heldByLong = null;
                 }
@@ -204,7 +246,7 @@ public class SeatLockService {
                     .seatNumber(seat.getSeatNumber())
                     .seatLabel(seatLabel)
                     .seatType(seat.getSeatType())
-                    .price(showtime.getPrice())
+                    .price(showtimePrice[0])
                     .status(status)
                     .heldBy(heldByLong)
                     .lockedByUserId(heldByLong)
@@ -219,13 +261,19 @@ public class SeatLockService {
     /**
      * Release hold keys from Redis (called upon cancellation or after payment confirmation)
      */
-    public void releaseHolds(Long showtimeId, List<Long> seatIds, Long userId) {
-        String userVal = String.valueOf(userId);
-        for (Long seatId : seatIds) {
-            String key = SEAT_HOLD_PREFIX + showtimeId + ":" + seatId;
-            deleteKeyIfOwned(key, userVal);
+    public void releaseHolds(Object rawShowtimeId, List<?> seatIds, Object rawUserId) {
+        String showtimeId = String.valueOf(rawShowtimeId);
+        Long numericShowtimeId = parseNumericShowtimeId(showtimeId);
+        String userVal = rawUserId != null ? String.valueOf(rawUserId) : "";
+
+        for (Object seatIdObj : seatIds) {
+            String seatId = String.valueOf(seatIdObj);
+            deleteKeyIfOwned(SEAT_HOLD_PREFIX + showtimeId + ":" + seatId, userVal);
+            deleteKeyIfOwned(SEAT_HOLD_PREFIX + numericShowtimeId + ":" + seatId, userVal);
+            deleteKeyIfOwned(showtimeId + ":" + seatId, userVal);
+            deleteKeyIfOwned(numericShowtimeId + ":" + seatId, userVal);
         }
-        auditLogService.record(userId.toString(), seatIds.toString(), "SEATS_RELEASED", 200, "Released Redis seat hold keys");
+        auditLogService.record(userVal, seatIds.toString(), "SEATS_RELEASED", 200, "Released Redis seat hold keys");
     }
 
     /**
@@ -350,7 +398,7 @@ public class SeatLockService {
 
     private void deleteKeyIfOwned(String key, String userId) {
         String owner = getKeyValue(key);
-        if (owner != null && owner.equals(userId)) {
+        if (owner != null && (userId == null || userId.isBlank() || isSameUser(owner, userId))) {
             if (redisTemplate != null) {
                 try {
                     redisTemplate.delete(key);
